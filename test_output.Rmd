@@ -1,0 +1,133 @@
+---
+title: "Movie Lens Project"
+author: "F. Seka"
+date: "05/04/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+The purpose of this report is to document the various strategies investigated in the frame of the Movie Lens final project, in partial fulfillment of the requirements for the EDX Harvard Data Science Professional Certificate.
+
+In the first part of the report, information is briefly given about the structuring and preparation of the data used to build and evaluate the machine learning algorithms. The second part describes in depth each approach analysed as part of this project. A final, optimized, algorithm is selected and tested agains the test dataset.
+
+## Data preparation
+
+**Note:** the data preparation script provided in the project instructions creates the edx end validation datasets. For the sake of efficiency, these datasets have been saved locally in R.Data format, hence avoiding a download of the data at each R session.
+
+The data was structured using following script
+
+```{r preparation, eval=T, message=F, warning=F, results='hide'}
+library(tidyverse)
+library(caret)
+
+load("DataReload.RData")
+set.seed(1)
+test_index <- createDataPartition(y = edx$rating, times = 1, p = 0.1, list = FALSE)
+
+edx_train <- edx[-test_index,]
+temp <- edx[test_index,]
+
+# Make sure userId and movieId in validation set are also in edx set
+
+edx_test <- temp %>% 
+  semi_join(edx_train, by = "movieId") %>%
+  semi_join(edx_train, by = "userId")
+
+# Add rows removed from validation set back into edx set
+
+removed <- anti_join(temp, edx_test)
+edx_train <- rbind(edx_train, removed)
+
+rm(temp, removed)
+
+
+```
+
+Resulting in the following structure:
+
+* edx
+    + edx_train: subset of the edx dataset used for training
+    + edx_test: subset of the edx dataset used for performance/cross-validation
+* validation: data set used as test set for the final evaluation
+
+
+## Analysis
+
+### Root Mean Square Error Calculation
+
+As a reminder, the Root Mean Squere Error Calculation (which we will call RMSE from now on) will be used to evaluate how close the predictions are to the true values in the *validation* set.
+
+```{r rmse_function, eval=T}
+RMSE <- function(true_ratings, predicted_ratings){
+  
+  sqrt(mean((true_ratings - predicted_ratings)^2))
+
+  }
+```
+
+### Naive prediction
+
+In a first approach, a simple strategy is to predict the rating of a movie using the rating mean value from the training dataset. This approach does not consider the specificity of the user.
+
+$$Y_{u,i}=\mu+\epsilon_{u,i}$$
+
+```{r naive_approach, message=F, warning=F}
+
+# Calculate the mean of the ratings
+mu_hat <- mean(edx_train$rating)
+
+# Use the RMSE function created to evaluate the error. As expected, this strategy will not provide the best RMSE.
+simple_approach_rmse<-RMSE(validation$rating, mu_hat)
+
+# We will create a dataframe to store our different results, for comparison purposes.
+rmse_results <- data_frame(method = "Naive Mean approach", RMSE = simple_approach_rmse)
+
+```
+
+This resulting in the following RMSE
+
+```{r echo=FALSE}
+library(knitr)
+kable(rmse_results)
+```
+
+### Movie effect model
+
+As learned from the course, we will attempt to model the movie effect, where some movies simply get rated better than others. This can be modelled through a bias term.
+
+$$Y_{u,i}=\mu+b_i+\epsilon_{u,i}$$
+
+The implementation is as follows:
+
+
+```{r echo=FALSE}
+library(knitr)
+kable(rmse_results)
+```
+
+As we can see, implementing the movie effect already brings some improvement to predictions.
+
+### Movie and user model
+
+
+$$Y_{u,i}=\mu+b_i+b_u+\epsilon_{u,i}$$
+The implementation is as follows:
+
+
+```{r echo=FALSE}
+library(knitr)
+kable(rmse_results)
+```
+
+### Regularization
+### Investigation of the movie genre impact
+### Final choice and evaluation on the test dataset
+
+# Conclusion
+
+# References
