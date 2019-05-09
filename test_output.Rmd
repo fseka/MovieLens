@@ -105,10 +105,26 @@ $$Y_{u,i}=\mu+b_i+\epsilon_{u,i}$$
 The implementation is as follows:
 
 
+```{r message=F, warning=F}
+mu <- mean(edx_train$rating) 
+movie_avgs <- edx_train %>% 
+  group_by(movieId) %>% 
+  summarize(b_i = mean(rating - mu))
+# If we now test the performance of this approach
+predicted_ratings <- edx_test %>% mutate(rating=mu) %>% left_join(movie_avgs, by='movieId') %>% mutate(prediction=rating+b_i)
+movie_effect_result<- RMSE(edx_test$rating,predicted_ratings$prediction)
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method="Movie Effect Model",  
+                                     RMSE = movie_effect_result))
+```
+
+This resulting in the following RMSE
+
 ```{r echo=FALSE}
 library(knitr)
 kable(rmse_results)
 ```
+
 
 As we can see, implementing the movie effect already brings some improvement to predictions.
 
@@ -119,15 +135,121 @@ $$Y_{u,i}=\mu+b_i+b_u+\epsilon_{u,i}$$
 The implementation is as follows:
 
 
+```{r message=F, warning=F}
+
+user_avgs <- edx_train %>% 
+  left_join(movie_avgs, by='movieId') %>%
+  group_by(userId) %>%
+  summarize(b_u = mean(rating - mu - b_i))
+
+predicted_ratings <- edx_test %>% 
+  mutate(rating=mu) %>% 
+  left_join(movie_avgs, by='movieId') %>% 
+  left_join(user_avgs, by='userId') %>%
+  mutate(pred = mu + b_i + b_u) %>%
+  pull(pred)
+
+user_effect_result<- RMSE(edx_test$rating,predicted_ratings)
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method="Movie and User Effect Model",  
+                                     RMSE = user_effect_result))
+```
+This resulting in the following RMSE
+
 ```{r echo=FALSE}
 library(knitr)
 kable(rmse_results)
 ```
 
-### Regularization
-### Investigation of the movie genre impact
+
+### Regularization - Movie Effect
+
+As seen in the course, noise can be introduced in data when a small portion of sample ccan cause large estimates, hence providing misleading results.
+
+An easy way to see this effect is to look at the best and worst rated movies:
+
+```{r echo=FALSE}
+movie_titles <- edx_train %>% 
+  select(movieId, title) %>%
+  distinct()
+```
+
+Best rated movies in the training data set:
+```{r message=F}
+edx_train %>% count(movieId) %>% 
+  left_join(movie_avgs) %>% left_join(movie_titles, by="movieId") %>% arrange(b_i) %>% 
+  select(title, b_i, n) %>% 
+  slice(1:10)
+```
+
+Worst rated movies in the training data set:
+```{r message=F}
+edx_train %>% count(movieId) %>% 
+  left_join(movie_avgs) %>% left_join(movie_titles, by="movieId") %>% arrange(desc(b_i)) %>% 
+  select(title, b_i, n) %>% 
+  slice(1:10)
+```
+All these movies appear to be rather singular, which is confirmed by their count of reviews.
+
+
+
+The following code explores the possibility to introduce a penalization factor such that movies that have not been rated by a significant number of reviewers weighs less than movies that have been largely rated. We test different values of the factor and identify the one minimizing the RMSE (details provided in the dedicated subsection below).
+
+```{r message=F, warning=F}
+lambda <- 1.5 # this value of lambda was determined through iterative tests, between 0 and 10, in 0.25 increments. 
+
+mu <- mean(edx_train$rating)
+movie_reg_avgs <- edx_train %>% group_by(movieId) %>% summarize(b_i = sum(rating - mu)/(n()+lambda), n_i = n())
+predicted_ratings <- edx_test %>% 
+  left_join(movie_reg_avgs, by = "movieId") %>%
+  mutate(pred = mu + b_i) %>%
+  pull(pred)
+model_3_rmse <- RMSE(predicted_ratings, edx_test$rating)
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method="Regularized Movie Effect Model",  
+                                     RMSE = model_3_rmse))
+```
+
+It turns out that the results provided through this method slightly improve the Movie effect Model results, but not to a significant degree.
+
+#### Determination of the regularization lambda
+
+The determination of the optimal lambda (over the training data set) was carried out using the following code:
+
+```{r message=F, warning=F}
+lambdas <- seq(0, 10, 0.25)
+
+mu <- mean(edx_train$rating)
+just_the_sum <- edx_train %>% 
+  group_by(movieId) %>% 
+  summarize(s = sum(rating - mu), n_i = n())
+
+rmses <- sapply(lambdas, function(l){
+  predicted_ratings <- edx_test %>% 
+    left_join(just_the_sum, by='movieId') %>% 
+    mutate(b_i = s/(n_i+l)) %>%
+    mutate(pred = mu + b_i) %>%
+    pull(pred)
+  return(RMSE(predicted_ratings, edx_test$rating))
+})
+```
+Ploting the RMSE as a function of the lambdas provides
+
+```{r message=F, warning=F}
+qplot(lambdas, rmses) 
+```
+
+### Regularization - Movie and User Effect
+
+With the same approach, but based indluding the user effect, a regularized model can be built, with an adequate penalization factor lambda:
+
 ### Final choice and evaluation on the test dataset
 
 # Conclusion
 
+## Further possible explotations
+### Investigation of the movie genre impact
+
 # References
+
+This is a test

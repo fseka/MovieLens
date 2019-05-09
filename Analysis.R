@@ -1,7 +1,7 @@
 library(tidyverse)
 library(caret)
 
-# Creating the Root Mean Square Error function to evaluate the performance of our different approaches
+# Creating the Root Mean Square Error  evaluation function to evaluate the performance of our different approaches
 
 RMSE <- function(true_ratings, predicted_ratings){
   sqrt(mean((true_ratings - predicted_ratings)^2))
@@ -73,5 +73,20 @@ user_effect_result<- RMSE(edx_test$rating,predicted_ratings)
 rmse_results <- bind_rows(rmse_results,
                           data_frame(method="Movie and User Effect Model",  
                                      RMSE = user_effect_result))
+
 # Taking into account the user effect significantly improves the algorithm's performance, as the additional decrease in RMSE can show.
+
+lambda <- 1.5
+mu <- mean(edx_train$rating)
+movie_reg_avgs <- edx_train %>% group_by(movieId) %>% summarize(b_i = sum(rating - mu)/(n()+lambda), n_i = n())
+predicted_ratings <- edx_test %>% 
+  left_join(movie_reg_avgs, by = "movieId") %>%
+  mutate(pred = mu + b_i) %>%
+  pull(pred)
+model_3_rmse <- RMSE(predicted_ratings, edx_test$rating)
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method="Regularized Movie Effect Model",  
+                                     RMSE = model_3_rmse))
+
+
 
