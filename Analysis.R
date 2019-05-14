@@ -76,6 +76,29 @@ rmse_results <- bind_rows(rmse_results,
 
 # Taking into account the user effect significantly improves the algorithm's performance, as the additional decrease in RMSE can show.
 
+# Penalization can be introduced to 
+
+# Determination of lambda
+# identifying lambda for the movie effect model
+lambdas <- seq(0, 10, 0.25)
+
+mu <- mean(edx_train$rating)
+just_the_sum <- edx_train %>% 
+  group_by(movieId) %>% 
+  summarize(s = sum(rating - mu), n_i = n())
+
+rmses <- sapply(lambdas, function(l){
+  predicted_ratings <- edx_test %>% 
+    left_join(just_the_sum, by='movieId') %>% 
+    mutate(b_i = s/(n_i+l)) %>%
+    mutate(pred = mu + b_i) %>%
+    pull(pred)
+  return(RMSE(predicted_ratings, edx_test$rating))
+})
+qplot(lambdas, rmses)  
+lambdas[which.min(rmses)]
+
+
 lambda <- 1.5
 mu <- mean(edx_train$rating)
 movie_reg_avgs <- edx_train %>% group_by(movieId) %>% summarize(b_i = sum(rating - mu)/(n()+lambda), n_i = n())
@@ -89,4 +112,78 @@ rmse_results <- bind_rows(rmse_results,
                                      RMSE = model_3_rmse))
 
 
+# A further optimisation is to apply data regularisation on the user/movied effect model. To this end, a new penalisation factor lambda
+# has to be identified
+# identifying lambda for the movie effect model
 
+lambdas <- seq(0, 10, 1)
+
+rmses2 <- sapply(lambdas, function(l){
+
+  mu <- mean(edx_train$rating)
+  
+  b_i <- edx_train %>% 
+    group_by(movieId) %>%
+    summarize(b_i = sum(rating - mu)/(n()+l))
+  
+  b_u <- edx_train %>% 
+    left_join(b_i, by="movieId") %>%
+    group_by(userId) %>%
+    summarize(b_u = sum(rating - b_i - mu)/(n()+l))
+  
+  predicted_ratings <- 
+    edx_test %>% 
+    left_join(b_i, by = "movieId") %>%
+    left_join(b_u, by = "userId") %>%
+    mutate(pred = mu + b_i + b_u) %>%
+    pull(pred)
+  
+  return(RMSE(predicted_ratings, edx_test$rating))
+})
+
+qplot(lambdas, rmses2)  
+
+lambda2 <- 5
+
+mu <- mean(edx_train$rating)
+b_i <- edx_train %>% 
+  group_by(movieId) %>%
+  summarize(b_i = sum(rating - mu)/(n()+lambda2))
+b_u <- edx_train %>% 
+  left_join(b_i, by="movieId") %>%
+  group_by(userId) %>%
+  summarize(b_u = sum(rating - b_i - mu)/(n()+lambda2))
+predicted_ratings <- 
+  edx_test %>% 
+  left_join(b_i, by = "movieId") %>%
+  left_join(b_u, by = "userId") %>%
+  mutate(pred = mu + b_i + b_u) %>%
+  pull(pred)
+model_4_rmse <- RMSE(predicted_ratings, edx_test$rating)
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method="Regularized Movie and User Effect Model",  
+                                     RMSE = model_4_rmse))
+
+
+## Final Validation 
+
+lambda2 <- 5
+
+mu <- mean(edx_train$rating)
+b_i <- edx_train %>% 
+  group_by(movieId) %>%
+  summarize(b_i = sum(rating - mu)/(n()+lambda2))
+b_u <- edx_train %>% 
+  left_join(b_i, by="movieId") %>%
+  group_by(userId) %>%
+  summarize(b_u = sum(rating - b_i - mu)/(n()+lambda2))
+predicted_ratings <- 
+  validation %>% 
+  left_join(b_i, by = "movieId") %>%
+  left_join(b_u, by = "userId") %>%
+  mutate(pred = mu + b_i + b_u) %>%
+  pull(pred)
+model_final_rmse <- RMSE(predicted_ratings, validation$rating)
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method="Validation - Regularized Movie and User Effect Model",  
+                                     RMSE = model_final_rmse))

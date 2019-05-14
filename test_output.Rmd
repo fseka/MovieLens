@@ -2,7 +2,9 @@
 title: "Movie Lens Project"
 author: "F. Seka"
 date: "05/04/2019"
-output: html_document
+output: pdf_document
+toc: true
+toc_depth: 4
 ---
 
 ```{r setup, include=FALSE}
@@ -174,7 +176,7 @@ movie_titles <- edx_train %>%
   distinct()
 ```
 
-Best rated movies in the training data set:
+Worst rated movies in the training data set:
 ```{r message=F}
 edx_train %>% count(movieId) %>% 
   left_join(movie_avgs) %>% left_join(movie_titles, by="movieId") %>% arrange(b_i) %>% 
@@ -182,7 +184,7 @@ edx_train %>% count(movieId) %>%
   slice(1:10)
 ```
 
-Worst rated movies in the training data set:
+Best rated movies in the training data set:
 ```{r message=F}
 edx_train %>% count(movieId) %>% 
   left_join(movie_avgs) %>% left_join(movie_titles, by="movieId") %>% arrange(desc(b_i)) %>% 
@@ -190,8 +192,6 @@ edx_train %>% count(movieId) %>%
   slice(1:10)
 ```
 All these movies appear to be rather singular, which is confirmed by their count of reviews.
-
-
 
 The following code explores the possibility to introduce a penalization factor such that movies that have not been rated by a significant number of reviewers weighs less than movies that have been largely rated. We test different values of the factor and identify the one minimizing the RMSE (details provided in the dedicated subsection below).
 
@@ -212,7 +212,25 @@ rmse_results <- bind_rows(rmse_results,
 
 It turns out that the results provided through this method slightly improve the Movie effect Model results, but not to a significant degree.
 
-#### Determination of the regularization lambda
+Looking at the best and worst rated films taking into account the penalization factor, we can see that the films listed are not these obscure films anymore:
+
+Worst rated movies in the training data set with penalized estimates:
+```{r message=F}
+edx_train %>% count(movieId) %>% 
+  left_join(movie_reg_avgs) %>% left_join(movie_titles, by="movieId") %>% arrange(b_i) %>% 
+  select(title, b_i, n) %>% 
+  slice(1:10)
+```
+Best rated movies in the training data set with penalized estimates:
+```{r message=F}
+edx_train %>% count(movieId) %>% 
+  left_join(movie_reg_avgs) %>% left_join(movie_titles, by="movieId") %>% arrange(desc(b_i)) %>% 
+  select(title, b_i, n) %>% 
+  slice(1:10)
+```
+These ranks appear to make more sense now, with reknowned films being listed.
+
+#### Determination of the regularization lambda - Movie effect Model
 
 The determination of the optimal lambda (over the training data set) was carried out using the following code:
 
@@ -241,15 +259,122 @@ qplot(lambdas, rmses)
 
 ### Regularization - Movie and User Effect
 
-With the same approach, but based indluding the user effect, a regularized model can be built, with an adequate penalization factor lambda:
+With the same approach, but based indluding the user effect, a regularized model can be built, with an adequate penalization factor lambda.
+
+#### Determination of the regularization lambda - Movie and user effect Model
+
+The determination of the optimal lambda (over the training data set) was carried out using the following code:
+
+```{r message=F, warning=F}
+lambdas <- seq(0, 10, 1)
+
+rmses2 <- sapply(lambdas, function(l){
+
+  mu <- mean(edx_train$rating)
+  
+  b_i <- edx_train %>% 
+    group_by(movieId) %>%
+    summarize(b_i = sum(rating - mu)/(n()+l))
+  
+  b_u <- edx_train %>% 
+    left_join(b_i, by="movieId") %>%
+    group_by(userId) %>%
+    summarize(b_u = sum(rating - b_i - mu)/(n()+l))
+  
+  predicted_ratings <- 
+    edx_test %>% 
+    left_join(b_i, by = "movieId") %>%
+    left_join(b_u, by = "userId") %>%
+    mutate(pred = mu + b_i + b_u) %>%
+    pull(pred)
+  
+  return(RMSE(predicted_ratings, edx_test$rating))
+})
+```
+Ploting the RMSE as a function of the lambdas provides
+
+```{r message=F, warning=F}
+qplot(lambdas, rmses2) 
+```
+
+The best value for the regularized movie and user effect model is therefore 5.
+
+#### Regularized movie and user effect model RMSE
+```{r message=F, warning=F}
+lambda2 <- 5
+
+mu <- mean(edx_train$rating)
+b_i <- edx_train %>% 
+  group_by(movieId) %>%
+  summarize(b_i = sum(rating - mu)/(n()+lambda2))
+b_u <- edx_train %>% 
+  left_join(b_i, by="movieId") %>%
+  group_by(userId) %>%
+  summarize(b_u = sum(rating - b_i - mu)/(n()+lambda2))
+predicted_ratings <- 
+  edx_test %>% 
+  left_join(b_i, by = "movieId") %>%
+  left_join(b_u, by = "userId") %>%
+  mutate(pred = mu + b_i + b_u) %>%
+  pull(pred)
+model_4_rmse <- RMSE(predicted_ratings, edx_test$rating)
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method="Regularized Movie and User Effect Model",  
+                                     RMSE = model_4_rmse))
+```
+
+At this stage, the summary of the achived RMSE achieved over the training dataset is as follows:
+
+This resulting in the following RMSE
+
+```{r echo=FALSE}
+library(knitr)
+kable(rmse_results)
+```
+
+We can see that the regularisation has in each case (movie effect and movie/user effect models), provided a slight improvement of the RMSE.
 
 ### Final choice and evaluation on the test dataset
 
+Based on the results outlined before, the retained approach is the **regularised movie and user effect model**.
+We will now test this approach on the validation dataset:
+
+```{r message=F, warning=F}
+lambda2 <- 5
+
+mu <- mean(edx_train$rating)
+b_i <- edx_train %>% 
+  group_by(movieId) %>%
+  summarize(b_i = sum(rating - mu)/(n()+lambda2))
+b_u <- edx_train %>% 
+  left_join(b_i, by="movieId") %>%
+  group_by(userId) %>%
+  summarize(b_u = sum(rating - b_i - mu)/(n()+lambda2))
+predicted_ratings <- 
+  validation %>% 
+  left_join(b_i, by = "movieId") %>%
+  left_join(b_u, by = "userId") %>%
+  mutate(pred = mu + b_i + b_u) %>%
+  pull(pred)
+model_final_rmse <- RMSE(predicted_ratings, validation$rating)
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method="Regularized Movie and User Effect Model - Validation Set",  
+                                     RMSE = model_final_rmse))
+```
+
+The final RMSE obtained over the validation dataset is  `r model_final_rmse` .
+
+```{r echo=FALSE}
+library(knitr)
+kable(rmse_results)
+```
+
 # Conclusion
 
-## Further possible explotations
-### Investigation of the movie genre impact
+Using a regularised model taking into account the user and movie effects, a final RMSE of `r model_final_rmse` over the validation data set could be achieved. Further improvement could be considered, such as the genre effect, given the possibility for some film genres to be generally more popular than others (e.g. comedy or action). Another direction to explore would be to introduce into the model the personal preference of each user as a contributing factor to the prediction.
 
 # References
 
-This is a test
+* EDX Harvard Data Science Course
+* Data Analysis and Prediction Algorithms with R
+

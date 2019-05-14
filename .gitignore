@@ -7,3 +7,5 @@
 DataReload.RData
 *.html
 *.dat
+*.pdf
+test_output_files
