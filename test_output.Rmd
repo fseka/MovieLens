@@ -1,10 +1,11 @@
 ---
 title: "Movie Lens Project"
 author: "F. Seka"
-date: "05/04/2019"
+date: "14/05/2019"
 output: pdf_document
 toc: true
 toc_depth: 4
+number_sections: true
 ---
 
 ```{r setup, include=FALSE}
@@ -83,7 +84,9 @@ $$Y_{u,i}=\mu+\epsilon_{u,i}$$
 # Calculate the mean of the ratings
 mu_hat <- mean(edx_train$rating)
 
-# Use the RMSE function created to evaluate the error. As expected, this strategy will not provide the best RMSE.
+# Use the RMSE function created to evaluate the error.
+# As expected, this strategy will not provide the best RMSE.
+
 simple_approach_rmse<-RMSE(validation$rating, mu_hat)
 
 # We will create a dataframe to store our different results, for comparison purposes.
@@ -113,7 +116,8 @@ movie_avgs <- edx_train %>%
   group_by(movieId) %>% 
   summarize(b_i = mean(rating - mu))
 # If we now test the performance of this approach
-predicted_ratings <- edx_test %>% mutate(rating=mu) %>% left_join(movie_avgs, by='movieId') %>% mutate(prediction=rating+b_i)
+predicted_ratings <- edx_test %>% mutate(rating=mu) %>%
+  left_join(movie_avgs, by='movieId') %>% mutate(prediction=rating+b_i)
 movie_effect_result<- RMSE(edx_test$rating,predicted_ratings$prediction)
 rmse_results <- bind_rows(rmse_results,
                           data_frame(method="Movie Effect Model",  
@@ -156,7 +160,10 @@ rmse_results <- bind_rows(rmse_results,
                           data_frame(method="Movie and User Effect Model",  
                                      RMSE = user_effect_result))
 ```
-This resulting in the following RMSE
+
+This results in the following RMSE: 
+
+
 
 ```{r echo=FALSE}
 library(knitr)
@@ -196,7 +203,8 @@ All these movies appear to be rather singular, which is confirmed by their count
 The following code explores the possibility to introduce a penalization factor such that movies that have not been rated by a significant number of reviewers weighs less than movies that have been largely rated. We test different values of the factor and identify the one minimizing the RMSE (details provided in the dedicated subsection below).
 
 ```{r message=F, warning=F}
-lambda <- 1.5 # this value of lambda was determined through iterative tests, between 0 and 10, in 0.25 increments. 
+lambda <- 1.5 # this value of lambda was determined through iterative tests, 
+# between 0 and 10, in 0.25 increments. 
 
 mu <- mean(edx_train$rating)
 movie_reg_avgs <- edx_train %>% group_by(movieId) %>% summarize(b_i = sum(rating - mu)/(n()+lambda), n_i = n())
@@ -224,8 +232,8 @@ edx_train %>% count(movieId) %>%
 Best rated movies in the training data set with penalized estimates:
 ```{r message=F}
 edx_train %>% count(movieId) %>% 
-  left_join(movie_reg_avgs) %>% left_join(movie_titles, by="movieId") %>% arrange(desc(b_i)) %>% 
-  select(title, b_i, n) %>% 
+  left_join(movie_reg_avgs) %>% left_join(movie_titles, by="movieId") %>% arrange(desc(b_i)) %>%
+    select(title, b_i, n) %>% 
   slice(1:10)
 ```
 These ranks appear to make more sense now, with reknowned films being listed.
@@ -334,10 +342,13 @@ kable(rmse_results)
 
 We can see that the regularisation has in each case (movie effect and movie/user effect models), provided a slight improvement of the RMSE.
 
-### Final choice and evaluation on the test dataset
+
+### Final choice and evaluation on the validation dataset
+
 
 Based on the results outlined before, the retained approach is the **regularised movie and user effect model**.
 We will now test this approach on the validation dataset:
+
 
 ```{r message=F, warning=F}
 lambda2 <- 5
@@ -358,11 +369,14 @@ predicted_ratings <-
   pull(pred)
 model_final_rmse <- RMSE(predicted_ratings, validation$rating)
 rmse_results <- bind_rows(rmse_results,
-                          data_frame(method="Regularized Movie and User Effect Model - Validation Set",  
+data_frame(method="Regularized Movie and User Effect Model - Validation Set",  
                                      RMSE = model_final_rmse))
 ```
 
+
 The final RMSE obtained over the validation dataset is  `r model_final_rmse` .
+
+
 
 ```{r echo=FALSE}
 library(knitr)
