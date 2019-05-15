@@ -1,14 +1,23 @@
 library(tidyverse)
 library(caret)
 
-# Creating the Root Mean Square Error  evaluation function to evaluate the performance of our different approaches
+# MovieLens Project Code
+# F. Seka, 15/05/2019
+
+#############
+# NOTE: this script will need the MovieLensData set to be loaded in the workspace using the script provided by the course 
+# This script provides the edx and validation sets
+#############
+
+
+# RMSE : Creating the Root Mean Square Error evaluation function to evaluate the performance of our different approaches
 
 RMSE <- function(true_ratings, predicted_ratings){
   sqrt(mean((true_ratings - predicted_ratings)^2))
 }
 
 
-# We will partiion the edx dataframe in train and test sets. The validation dataframe will be kept for th final evaluation of our algorihtm.
+# Data Preparation: We will partition the edx dataframe in train and test sets. The validation dataframe will be kept for the final evaluation of our algorihtm.
 
 set.seed(1)
 test_index <- createDataPartition(y = edx$rating, times = 1, p = 0.1, list = FALSE)
@@ -29,8 +38,12 @@ edx_train <- rbind(edx_train, removed)
 rm(temp, removed)
 
 
+##########################################
+# NAIVE APPROACH
+##########################################
 
-# Let's begin with a simple approach to check that our data is load correctly. We will predict the rating of a movie using the rating mean value from the training dataset. This approach does not consider the specificity of the user.
+# Let's begin with a simple approach to check that our data is load correctly. 
+# We will predict the rating of a movie using the rating mean value from the training dataset. This approach does not consider the specificity of the user.
 
 # Calculate the mean of the ratings
 mu_hat <- mean(edx_train$rating)
@@ -41,6 +54,10 @@ simple_approach_rmse<-RMSE(validation$rating, mu_hat)
 # We will create a dataframe to store our different results, for comparison purposes.
 rmse_results <- data_frame(method = "Naive Mean approach", RMSE = simple_approach_rmse)
 
+
+##########################################
+# MOVIE EFFECT APPROACH
+##########################################
 # As learned from the course, we will attempt to model the movie effect, where some movies simply get rated better than others. This can be modelled through a bias term
 
 mu <- mean(edx_train$rating) 
@@ -55,6 +72,12 @@ rmse_results <- bind_rows(rmse_results,
                                      RMSE = movie_effect_result))
 
 # As we can see, implementing the movie effect already brings some improvement to predictions.
+
+
+
+##########################################
+# MOVIE AND USER EFFECT APPROACH 
+##########################################
 # A similar approach can be implemented to account for the "user variability", in the sense that different user will be more or less severe when rating a film. This parameter will be different from one user to the other.
 
 user_avgs <- edx_train %>% 
@@ -76,7 +99,18 @@ rmse_results <- bind_rows(rmse_results,
 
 # Taking into account the user effect significantly improves the algorithm's performance, as the additional decrease in RMSE can show.
 
-# Penalization can be introduced to 
+
+##########################################
+# REGULARIZED APPROACHES
+##########################################
+
+#  following code explores the possibility to introduce a penalization factor such that movies that have not been rated by a significant
+# number of reviewers weighs less than movies that have been largely rated. We test different values of the factor 
+# and identify the one minimizing the RMSE (details provided in the dedicated subsection below).
+
+##########################################
+# REGULARIZED MOVIE EFFECT APPROACH
+##########################################
 
 # Determination of lambda
 # identifying lambda for the movie effect model
@@ -111,6 +145,10 @@ rmse_results <- bind_rows(rmse_results,
                           data_frame(method="Regularized Movie Effect Model",  
                                      RMSE = model_3_rmse))
 
+
+##########################################
+# REGULARIZED MOVIE AND USER EFFECT APPROACH
+##########################################
 
 # A further optimisation is to apply data regularisation on the user/movied effect model. To this end, a new penalisation factor lambda
 # has to be identified
@@ -165,7 +203,9 @@ rmse_results <- bind_rows(rmse_results,
                                      RMSE = model_4_rmse))
 
 
-## Final Validation 
+##########################################
+# REGULARIZED MOVIE EFFECT APPROACH RUN OVER THE VALIDATION DATASET
+########################################## 
 
 lambda2 <- 5
 
